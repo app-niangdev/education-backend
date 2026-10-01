@@ -58,6 +58,7 @@ jobs:
               sleep 3
             done
             docker compose exec -T -u www-data backend php artisan migrate --force
+            docker compose exec -T -u www-data backend php artisan db:seed --force
             docker image prune -f
 
       - uses: appleboy/ssh-action@v1
