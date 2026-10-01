@@ -1,0 +1,17 @@
+vendor
+node_modules
+.env
+.env.*
+!.env.example
+.git
+.github
+storage/logs/*
+storage/framework/views/*.php
+bootstrap/cache/*.php
+public/storage
+public/build
+public/hot
+tests
+g2000_bagrny
+.phpunit.result.cache
+.DS_Store

@@ -1,0 +1,71 @@
+# À placer sur le VPS dans /opt/education/docker-compose.yml.
+# Le .env du backend va dans /opt/education/backend/.env (copie de .env.example,
+# valeurs de production).
+#
+# Valeurs propres à la production dans ce .env :
+#   APP_ENV=production
+#   APP_DEBUG=false
+#   APP_KEY=...                      (docker compose run --rm --entrypoint php backend artisan key:generate --show)
+#   APP_URL=https://backendeducation.niangdev.com
+#   FRONTEND_URL=https://education.niangdev.com
+#   DB_CONNECTION=pgsql
+#   DB_HOST=postgres                 (PostgreSQL partagé, joint par le réseau infrastructure_net)
+#   DB_PORT=5432
+#   DB_DATABASE=... / DB_USERNAME=... / DB_PASSWORD=...
+#   BROADCAST_CONNECTION=reverb
+#   REVERB_APP_ID=... / REVERB_APP_KEY=... / REVERB_APP_SECRET=...
+#   REVERB_HOST=127.0.0.1            (Laravel publie vers Reverb dans le même conteneur ;
+#   REVERB_PORT=8080                  l'adresse publique, elle, est dans environment.prod.ts
+#   REVERB_SCHEME=http                du frontend)
+#   MAIL_MAILER=smtp + MAIL_*        (les codes OTP partent par e-mail)
+#
+# REVERB_APP_KEY doit rester identique à reverb.key dans environment.prod.ts du frontend.
+services:
+  backend:
+    image: ghcr.io/app-niangdev/education-backend:latest
+    container_name: backend-education
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    ports:
+      # Exposé uniquement en local : Nginx de l'hôte fait le proxy HTTPS
+      - "127.0.0.1:8085:80"
+    volumes:
+      # Fichiers envoyés par les utilisateurs (logos, photos, justificatifs) et logs :
+      # sans ce volume ils disparaîtraient à chaque déploiement.
+      - backend_storage:/var/www/storage
+    networks:
+      - education_net
+      - infrastructure_net
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/up"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  frontend:
+    image: ghcr.io/app-niangdev/education-frontend:latest
+    container_name: frontend-education
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8084:80"
+    networks:
+      - education_net
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  backend_storage:
+
+networks:
+  education_net:
+  infrastructure_net:
+    external: true

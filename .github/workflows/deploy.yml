@@ -1,0 +1,73 @@
+name: Deploy Backend Education
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.vars.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: vars
+        run: echo "sha=${GITHUB_SHA::8}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: |
+            ghcr.io/app-niangdev/education-backend:latest
+            ghcr.io/app-niangdev/education-backend:${{ steps.vars.outputs.sha }}
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            cd /opt/education
+            echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u ${{ secrets.GHCR_USERNAME }} --password-stdin
+            docker compose pull backend
+            docker compose up -d backend
+            # L'entrypoint attend PostgreSQL puis reconstruit les caches : on
+            # ne migre qu'une fois le conteneur prêt à répondre.
+            for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+              curl -sf -o /dev/null http://localhost:8085/up && break
+              sleep 3
+            done
+            docker compose exec -T -u www-data backend php artisan migrate --force
+            docker image prune -f
+
+      - uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            for i in 1 2 3 4 5 6 7 8 9 10; do
+              curl -sf -o /dev/null http://localhost:8085/up && exit 0
+              sleep 3
+            done
+            echo "Healthcheck failed" && exit 1
