@@ -10,16 +10,16 @@ use Illuminate\Foundation\Http\FormRequest;
 class StoreInscriptionRequest extends FormRequest
 {
     /**
-     * L'inscription est un acte de caisse : elle ouvre les frais et l'echeancier
-     * que le tresorier encaissera. C'est donc lui qui la saisit, au guichet, dans
-     * la foulee de la fiche eleve — le manager ne fait plus qu'en suivre la liste
-     * (voir InscriptionController::index, ouvert plus largement).
+     * L'inscription est saisie par le manager et le surveillant, qui recoivent
+     * les familles et tiennent la fiche eleve.
      *
-     * Le surveillant la garde : il recoit lui aussi les familles.
+     * Le tresorier n'inscrit pas : c'est lui qui VALIDE l'inscription, en
+     * encaissant le premier versement (voir ValiderInscriptionRequest). Tant
+     * qu'il ne l'a pas fait, elle reste en attente.
      */
     public function authorize(): bool
     {
-        return in_array($this->user()->role?->name, ['admin', 'treasurer', 'supervisor']);
+        return in_array($this->user()->role?->name, ['admin', 'manager', 'supervisor']);
     }
 
     public function rules(): array

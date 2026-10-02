@@ -20,6 +20,8 @@ use App\Http\Controllers\EvaluationController;
 use App\Http\Controllers\MatiereController;
 use App\Http\Controllers\EtablissementController;
 use App\Http\Controllers\FinanceTresorierController;
+use App\Http\Controllers\RelancePaiementController;
+use App\Http\Controllers\WhatsappController;
 use App\Http\Controllers\FraisScolaireController;
 use App\Http\Controllers\InscriptionController;
 use App\Http\Controllers\DepenseController;
@@ -380,6 +382,9 @@ Route::middleware(['jwt.auth'])->group(function () {
         Route::get('/fiche-pdf/{id}',    [InscriptionController::class, 'fichePdf']);
     });
 
+    // Voyant de la liaison WhatsApp (admin et manager).
+    Route::get('/whatsapp/statut', [WhatsappController::class, 'statut']);
+
     Route::prefix('finance-tresorier')->group(function () {
         Route::get('/inscriptions/a-encaisser',              [FinanceTresorierController::class, 'aEncaisser']);
         Route::post('/inscriptions/valider/{inscriptionId}', [FinanceTresorierController::class, 'validerInscription']);
@@ -408,6 +413,11 @@ Route::middleware(['jwt.auth'])->group(function () {
         Route::get('/mensualites/factures/show/{id}',         [FinanceTresorierController::class, 'showFactureMensualite']);
         Route::get('/mensualites/factures/pdf/{id}',          [FinanceTresorierController::class, 'factureMensualitePdf']);
         Route::post('/mensualites/factures/whatsapp/{id}',    [FinanceTresorierController::class, 'factureMensualiteWhatsapp'])->middleware('throttle:20,1');
+
+        // Relances WhatsApp des familles en retard de paiement.
+        Route::get('/relances/debiteurs',                     [RelancePaiementController::class, 'debiteurs']);
+        Route::get('/relances/historique',                    [RelancePaiementController::class, 'historique']);
+        Route::post('/relances/envoyer/{tuteurId}',           [RelancePaiementController::class, 'relancer'])->middleware('throttle:60,1');
     });
 
     Route::prefix('activity-logs')->group(function () {

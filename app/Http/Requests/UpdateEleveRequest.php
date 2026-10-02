@@ -21,12 +21,12 @@ class UpdateEleveRequest extends FormRequest
      * consignes medicales). Il modifie donc au meme titre que l'admin et le
      * manager. La suppression, elle, reste hors de sa portee.
      *
-     * Le tresorier de meme : il saisit la fiche au guichet (StoreEleveRequest)
-     * et doit pouvoir corriger dans la foulee ce qu'il vient d'y ecrire.
+     * Le tresorier consulte la fiche sans la modifier : une coordonnee a
+     * corriger passe par la scolarite.
      */
     public function authorize(): bool
     {
-        return in_array($this->user()->role?->name, ['admin', 'manager', 'supervisor', 'treasurer']);
+        return in_array($this->user()->role?->name, ['admin', 'manager', 'supervisor']);
     }
 
     public function rules(): array

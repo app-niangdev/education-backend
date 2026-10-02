@@ -41,6 +41,14 @@ return [
         // Tuteur::normaliserTelephone) : WhatsApp, lui, l'exige.
         'country_code'           => (string) env('WAHA_COUNTRY_CODE', '221'),
         'national_number_length' => (int) env('WAHA_NATIONAL_NUMBER_LENGTH', 9),
+
+        // Relances des familles en retard : delai minimal entre deux relances
+        // d'un meme tuteur.
+        'relance_delai_heures' => (int) env('WAHA_RELANCE_DELAI_HEURES', 72),
+
+        // Rappel automatique avant l'echeance d'une mensualite : nombre de
+        // jours d'avance. 0 desactive le rappel.
+        'rappel_jours_avant' => (int) env('WAHA_RAPPEL_JOURS_AVANT', 3),
     ],
 
     'slack' => [

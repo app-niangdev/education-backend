@@ -69,10 +69,9 @@ trait AuthorizesByRole
      * Les ecrans du parcours d'inscription : fiche eleve, liste des eleves,
      * liste des inscriptions, annuaire des tuteurs.
      *
-     * Le tresorier s'y ajoute parce que l'inscription est desormais son acte :
-     * il saisit la fiche puis l'inscription dans la foulee, au guichet. Il lui
-     * faut donc lire ce qu'il cree — sans quoi l'ecran d'inscription ne
-     * pourrait meme pas afficher l'eleve qu'il vient d'enregistrer.
+     * Le tresorier s'y ajoute en lecture seule : il encaisse des inscriptions
+     * qu'il ne saisit pas, et doit pouvoir consulter la fiche de l'eleve et de
+     * son tuteur avant de prendre un paiement ou de relancer une famille.
      *
      * Les ecritures restent departagees par les FormRequest, et la suppression
      * par authorizeAdminOrManager().

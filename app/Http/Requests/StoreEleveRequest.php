@@ -18,13 +18,12 @@ class StoreEleveRequest extends FormRequest
      * manager, comme il la modifie deja. La suppression, elle, reste hors de
      * sa portee (voir EleveController::destroy).
      *
-     * Le tresorier cree egalement : la fiche eleve est la premiere etape de
-     * l'inscription qu'il saisit, et l'ecran enchaine directement de l'une a
-     * l'autre. Sans ce droit, il ne pourrait inscrire qu'un eleve deja present.
+     * Le tresorier, lui, ne fait que consulter : la fiche eleve releve de la
+     * scolarite, pas de la caisse.
      */
     public function authorize(): bool
     {
-        return in_array($this->user()->role?->name, ['admin', 'manager', 'supervisor', 'treasurer']);
+        return in_array($this->user()->role?->name, ['admin', 'manager', 'supervisor']);
     }
 
     public function rules(): array

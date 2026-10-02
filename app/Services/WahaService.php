@@ -64,6 +64,30 @@ class WahaService
             ->json() ?? [];
     }
 
+    /**
+     * Etat de la session WhatsApp : `WORKING` quand le telephone est relie,
+     * `SCAN_QR_CODE`, `STOPPED` ou `FAILED` sinon. Delai court : c'est un
+     * voyant, il ne doit pas faire attendre l'ecran qui l'affiche.
+     *
+     * @return array{status: ?string, numero: ?string}
+     *
+     * @throws RuntimeException|RequestException
+     */
+    public function sessionStatus(): array
+    {
+        $session = $this->client()
+            ->timeout(8)
+            ->get('/api/sessions/' . rawurlencode(config('services.waha.session')))
+            ->throw()
+            ->json() ?? [];
+
+        return [
+            'status' => $session['status'] ?? null,
+            // « 221771234567@c.us » -> « 221771234567 »
+            'numero' => isset($session['me']['id']) ? strstr($session['me']['id'], '@', true) : null,
+        ];
+    }
+
     private function client(): PendingRequest
     {
         if (!$this->isConfigured()) {
