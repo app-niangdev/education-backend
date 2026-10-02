@@ -16,4 +16,12 @@ interface JustificatifServiceInterface
      * module finance).
      */
     public function rendre(PieceJointeEnum $type, int|string $pieceId): Response;
+
+    /**
+     * Le meme justificatif, sous forme de fichier a transmettre plutot que de
+     * reponse HTTP : c'est ce qui part au tuteur sur WhatsApp.
+     *
+     * @return array{contenu: string, nom: string}
+     */
+    public function fichier(PieceJointeEnum $type, int|string $pieceId): array;
 }

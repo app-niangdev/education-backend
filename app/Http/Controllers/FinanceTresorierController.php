@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\PieceJointeEnum;
 use App\Helpers\ApiResponse;
 use App\Http\Requests\PayerFactureMensualitesRequest;
 use App\Helpers\ColorHelper;
@@ -9,18 +10,22 @@ use App\Http\Requests\PayerMensualiteRequest;
 use App\Http\Requests\PayerMensualitesRepartiRequest;
 use App\Http\Requests\ValiderInscriptionRequest;
 use App\Interfaces\FinanceTresorierServiceInterface;
+use App\Models\Eleve;
 use App\Models\Etablissement;
 use App\Models\Parametrage;
+use App\Services\WhatsappJustificatifService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class FinanceTresorierController extends Controller
 {
     public function __construct(
-        private readonly FinanceTresorierServiceInterface $service
+        private readonly FinanceTresorierServiceInterface $service,
+        private readonly WhatsappJustificatifService      $whatsapp,
     ) {}
 
     /**
@@ -40,7 +45,10 @@ class FinanceTresorierController extends Controller
             $request->user(),
         );
 
-        return ApiResponse::success($inscription, 'Inscription validée et paiement enregistré avec succès');
+        return ApiResponse::success(
+            $inscription,
+            $this->avecAvisWhatsapp('Inscription validée et paiement enregistré avec succès', $inscription->eleve),
+        );
     }
 
     public function aEncaisser(Request $request): JsonResponse
@@ -114,7 +122,10 @@ class FinanceTresorierController extends Controller
             $request->user(),
         );
 
-        return ApiResponse::success($inscription, 'Versement réparti enregistré avec succès');
+        return ApiResponse::success(
+            $inscription,
+            $this->avecAvisWhatsapp('Versement réparti enregistré avec succès', $inscription->eleve),
+        );
     }
 
     /**
@@ -135,7 +146,11 @@ class FinanceTresorierController extends Controller
             $request->user(),
         );
 
-        return ApiResponse::success($facture, 'Facture enregistrée avec succès', 201);
+        return ApiResponse::success(
+            $facture,
+            $this->avecAvisWhatsapp('Facture enregistrée avec succès', $facture->inscription?->eleve),
+            201,
+        );
     }
 
     public function facturesMensualite(Request $request): JsonResponse
@@ -206,7 +221,10 @@ class FinanceTresorierController extends Controller
             $request->user(),
         );
 
-        return ApiResponse::success($mensualite, 'Versement enregistré avec succès');
+        return ApiResponse::success(
+            $mensualite,
+            $this->avecAvisWhatsapp('Versement enregistré avec succès', $mensualite->inscription?->eleve),
+        );
     }
 
     public function paiementsMensualite(Request $request): JsonResponse
@@ -237,6 +255,65 @@ class FinanceTresorierController extends Controller
         $this->authorizeTresorier();
 
         return $this->renderRecu($this->service->dataForRecuMensualite($id));
+    }
+
+    // ─── Envoi WhatsApp au tuteur ─────────────────────────────────────────────
+
+    /** Renvoie au tuteur le justificatif d'un versement sur inscription. */
+    public function recuInscriptionWhatsapp(string $id): JsonResponse
+    {
+        $this->authorizeTresorier();
+
+        return $this->renvoyerWhatsapp(PieceJointeEnum::RECU_INSCRIPTION, $id);
+    }
+
+    /** Renvoie au tuteur le justificatif d'une facture multi-mois. */
+    public function factureMensualiteWhatsapp(string $id): JsonResponse
+    {
+        $this->authorizeTresorier();
+
+        return $this->renvoyerWhatsapp(PieceJointeEnum::FACTURE_MENSUALITES, $id);
+    }
+
+    /**
+     * L'envoi automatique suit chaque encaissement ; ce renvoi sert quand il a
+     * echoue (session deconnectee, numero corrige depuis) ou que la famille
+     * reclame de nouveau son document. Contrairement a l'envoi automatique,
+     * l'echec est dit au tresorier : il doit savoir que rien n'est parti.
+     */
+    private function renvoyerWhatsapp(PieceJointeEnum $type, string $id): JsonResponse
+    {
+        $data = match ($type) {
+            PieceJointeEnum::RECU_INSCRIPTION    => $this->service->dataForRecuInscription($id),
+            PieceJointeEnum::RECU_MENSUALITE     => $this->service->dataForRecuMensualite($id),
+            PieceJointeEnum::FACTURE_MENSUALITES => $this->service->dataForFactureMensualite($id),
+        };
+
+        if (! $this->whatsapp->disponible($data['eleve'])) {
+            return ApiResponse::error($this->whatsapp->motifIndisponible($data['eleve']), 422);
+        }
+
+        try {
+            $this->whatsapp->renvoyer($type, $id);
+        } catch (\Throwable $e) {
+            Log::warning('Renvoi WhatsApp du justificatif impossible', [
+                'piece'    => $type->value,
+                'piece_id' => $id,
+                'erreur'   => $e->getMessage(),
+            ]);
+
+            return ApiResponse::error("L'envoi WhatsApp a échoué. Réessayez dans un instant.", 502);
+        }
+
+        return ApiResponse::success(null, 'Justificatif envoyé au tuteur sur WhatsApp.');
+    }
+
+    /** Dit au tresorier que le justificatif part aussi chez la famille. */
+    private function avecAvisWhatsapp(string $message, ?Eleve $eleve): string
+    {
+        return $this->whatsapp->disponible($eleve)
+            ? $message . '. Le justificatif est envoyé au tuteur sur WhatsApp.'
+            : $message;
     }
 
     /**

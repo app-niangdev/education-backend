@@ -32,6 +32,16 @@ class JustificatifService implements JustificatifServiceInterface
 
     public function rendre(PieceJointeEnum $type, int|string $pieceId): Response
     {
+        $fichier = $this->fichier($type, $pieceId);
+
+        return response($fichier['contenu'], 200, [
+            'Content-Type'        => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="' . $fichier['nom'] . '"',
+        ]);
+    }
+
+    public function fichier(PieceJointeEnum $type, int|string $pieceId): array
+    {
         return match ($type) {
             PieceJointeEnum::RECU_INSCRIPTION => $this->recu(
                 $this->finance->dataForRecuInscription($pieceId)
@@ -49,30 +59,36 @@ class JustificatifService implements JustificatifServiceInterface
      * Recu ou decharge, selon que le versement solde ou non le montant du.
      * Le nom du fichier le dit : une famille qui archive ses documents doit
      * distinguer un acompte d'un solde sans les ouvrir.
+     *
+     * @return array{contenu: string, nom: string}
      */
-    private function recu(array $data): Response
+    private function recu(array $data): array
     {
-        $data['etablissement'] = Etablissement::first();
-        $data['logo']          = $data['etablissement']?->logoDataUri();
-        $data                  += ColorHelper::palette(Parametrage::couleurPrincipale());
-
         $prefixe = $data['estSolde'] ? 'recu' : 'decharge';
 
-        return Pdf::loadView('pdf.recu-paiement', $data)
-            ->setPaper('a4', 'portrait')
-            ->download($prefixe . '-' . Str::slug($data['paiement']->numero_recu) . '.pdf');
+        return [
+            'contenu' => $this->pdf('pdf.recu-paiement', $data),
+            'nom'     => $prefixe . '-' . Str::slug($data['paiement']->numero_recu) . '.pdf',
+        ];
     }
 
-    private function facture(array $data): Response
+    /** @return array{contenu: string, nom: string} */
+    private function facture(array $data): array
+    {
+        $prefixe = $data['estSolde'] ? 'facture' : 'decharge';
+
+        return [
+            'contenu' => $this->pdf('pdf.facture-mensualites', $data),
+            'nom'     => $prefixe . '-' . Str::slug($data['facture']->numero_facture) . '.pdf',
+        ];
+    }
+
+    private function pdf(string $vue, array $data): string
     {
         $data['etablissement'] = Etablissement::first();
         $data['logo']          = $data['etablissement']?->logoDataUri();
         $data                  += ColorHelper::palette(Parametrage::couleurPrincipale());
 
-        $prefixe = $data['estSolde'] ? 'facture' : 'decharge';
-
-        return Pdf::loadView('pdf.facture-mensualites', $data)
-            ->setPaper('a4', 'portrait')
-            ->download($prefixe . '-' . Str::slug($data['facture']->numero_facture) . '.pdf');
+        return Pdf::loadView($vue, $data)->setPaper('a4', 'portrait')->output();
     }
 }

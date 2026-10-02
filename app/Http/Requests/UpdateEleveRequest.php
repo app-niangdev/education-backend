@@ -102,7 +102,7 @@ class UpdateEleveRequest extends FormRequest
                 'nullable', 'string', 'max:255',
             ],
             'tuteur.telephone_principal' => [
-                Rule::requiredIf(fn () => $this->tuteurEstUnTiers()),
+                Rule::requiredIf(fn () => $this->tuteurEstUnTiers() || $this->tuteurParentSansTelephone()),
                 'nullable', 'string', 'max:20',
             ],
             'tuteur.adresse' => [
@@ -160,6 +160,27 @@ class UpdateEleveRequest extends FormRequest
         ], true);
     }
 
+    /**
+     * Vrai lorsque le pere ou la mere devient tuteur sans qu'aucun numero ne
+     * puisse lui etre attribue : ni dans le bloc parent (requete ou fiche deja
+     * en base), ni sur une fiche tuteur existante, dont le telephone est
+     * toujours renseigne. Le numero doit alors etre saisi dans le bloc tuteur.
+     */
+    private function tuteurParentSansTelephone(): bool
+    {
+        $champ = match ($this->input('tuteur.lien_parente')) {
+            LienParenteEnum::PERE->value => 'telephone_pere',
+            LienParenteEnum::MERE->value => 'telephone_mere',
+            default => null,
+        };
+
+        if ($champ === null || $this->tuteurVise() !== null) {
+            return false;
+        }
+
+        return blank($this->input("eleve.{$champ}") ?? $this->eleve()?->{$champ});
+    }
+
     private function eleve(): ?Eleve
     {
         return $this->eleve ??= Eleve::find($this->route('id'));
@@ -180,7 +201,7 @@ class UpdateEleveRequest extends FormRequest
             'tuteur.lien_parente.required_with'   => 'Le lien de parenté du tuteur est obligatoire.',
             'tuteur.nom.required'                 => "Le nom du tuteur est obligatoire lorsqu'il n'est ni le père ni la mère.",
             'tuteur.prenom.required'              => "Le prénom du tuteur est obligatoire lorsqu'il n'est ni le père ni la mère.",
-            'tuteur.telephone_principal.required' => "Le téléphone du tuteur est obligatoire lorsqu'il n'est ni le père ni la mère.",
+            'tuteur.telephone_principal.required' => 'Le téléphone du tuteur est obligatoire.',
             'tuteur.adresse.required'             => "L'adresse du tuteur est obligatoire lorsqu'il n'est ni le père ni la mère.",
             'tuteur.email.email'                       => "L'adresse email du tuteur n'est pas valide.",
             'tuteur.nin.required'                      => "Le NIN du tuteur est obligatoire lorsque celui-ci n'est ni le père ni la mère.",

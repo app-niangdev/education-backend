@@ -387,6 +387,9 @@ Route::middleware(['jwt.auth'])->group(function () {
         Route::get('/paiements/show/{id}',                   [FinanceTresorierController::class, 'showPaiement']);
         // Justificatif : recu si le versement solde l'inscription, decharge sinon.
         Route::get('/paiements/recu-pdf/{id}',               [FinanceTresorierController::class, 'recuInscriptionPdf']);
+        // Renvoi du justificatif au tuteur sur WhatsApp (l'envoi automatique
+        // suit deja chaque encaissement).
+        Route::post('/paiements/whatsapp/{id}',              [FinanceTresorierController::class, 'recuInscriptionWhatsapp'])->middleware('throttle:20,1');
 
         // Mensualites : vue regroupee par eleve + reglement par tranches.
         Route::get('/mensualites/par-eleve',                 [FinanceTresorierController::class, 'inscriptionsMensualites']);
@@ -404,6 +407,7 @@ Route::middleware(['jwt.auth'])->group(function () {
         Route::get('/mensualites/factures/list',              [FinanceTresorierController::class, 'facturesMensualite']);
         Route::get('/mensualites/factures/show/{id}',         [FinanceTresorierController::class, 'showFactureMensualite']);
         Route::get('/mensualites/factures/pdf/{id}',          [FinanceTresorierController::class, 'factureMensualitePdf']);
+        Route::post('/mensualites/factures/whatsapp/{id}',    [FinanceTresorierController::class, 'factureMensualiteWhatsapp'])->middleware('throttle:20,1');
     });
 
     Route::prefix('activity-logs')->group(function () {

@@ -8,6 +8,7 @@ use App\Interfaces\ActivityLogServiceInterface;
 use App\Interfaces\FinanceTresorierRepositoryInterface;
 use App\Interfaces\FinanceTresorierServiceInterface;
 use App\Interfaces\NotificationPaiementServiceInterface;
+use App\Jobs\EnvoyerJustificatifWhatsapp;
 use App\Models\Eleve;
 use App\Models\FactureMensualite;
 use App\Models\Inscription;
@@ -33,10 +34,28 @@ class FinanceTresorierService implements FinanceTresorierServiceInterface
      * apparaissent ensemble, ou pas du tout. Le service de notification avale
      * ses propres erreurs — une messagerie indisponible ne doit jamais
      * empecher un tresorier de prendre l'argent d'une famille.
+     *
+     * Le justificatif part aussi sur le WhatsApp du tuteur, mais APRES le
+     * commit et apres la reponse HTTP : un recu ne doit jamais quitter
+     * l'etablissement pour un paiement finalement annule, et le tresorier
+     * n'a pas a attendre un service externe pour voir son encaissement.
      */
     private function notifierFamille(?Eleve $eleve, array $paiement): void
     {
         $this->notificationPaiement->notifier($eleve, $paiement);
+
+        if ($eleve === null) {
+            return;
+        }
+
+        $eleveId = $eleve->id;
+
+        DB::afterCommit(fn () => EnvoyerJustificatifWhatsapp::dispatchAfterResponse(
+            $eleveId,
+            $paiement['type'],
+            $paiement['pieceId'],
+            $paiement,
+        ));
     }
 
     /** « Mensualité de Mars 2026 » : ce que la famille lit dans son message. */

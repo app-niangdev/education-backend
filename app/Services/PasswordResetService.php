@@ -399,7 +399,7 @@ class PasswordResetService implements PasswordResetServiceInterface
      */
     private function lien(User $user, string $token, string $type): string
     {
-        $url = rtrim((string) env('FRONTEND_URL', config('app.url')), '/')
+        $url = rtrim((string) config('app.frontend_url'), '/')
             . '/reset-password?token=' . urlencode($token)
             . '&email=' . urlencode($user->email);
 
