@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Carbon;
 
 class Mensualite extends Model
 {
@@ -78,6 +79,23 @@ class Mensualite extends Model
     public function getResteAttribute(): int
     {
         return max(0, $this->montant_mensualite - $this->total_paye);
+    }
+
+    /**
+     * Vrai lorsque l'echeance est passee et qu'un solde reste du. Un mois
+     * sans date d'echeance (echeanciers anciens) est du a la fin du mois
+     * qu'il couvre.
+     *
+     * C'est LA definition du retard : les relances, les rappels et le tableau
+     * de bord du tresorier s'y referent tous, pour ne jamais compter deux
+     * chiffres differents sous le meme mot.
+     */
+    public function estEnRetard(): bool
+    {
+        $echeance = $this->date_echeance
+            ?? Carbon::create($this->annee, $this->mois, 1)->endOfMonth();
+
+        return $echeance->lt(now()->startOfDay()) && $this->reste > 0;
     }
 
     /**

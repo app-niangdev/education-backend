@@ -73,7 +73,7 @@ class StatistiqueService implements StatistiqueServiceInterface
             'par_mode_paiement'      => $this->parModePaiement($annee),
             'mensualites_par_statut' => $this->mensualitesParStatut($annee),
             'a_encaisser'            => $this->aEncaisser($annee),
-        ];
+        ] + $this->effectifsFinanciers($annee);
     }
 
     public function dashboardEnseignant(User $enseignantUser, ?AnneeScolaire $annee = null): array
@@ -177,6 +177,79 @@ class StatistiqueService implements StatistiqueServiceInterface
             'validee'    => (int) ($parStatut[StatutInscriptionEnum::VALIDEE->value] ?? 0),
             'annulee'    => (int) ($parStatut[StatutInscriptionEnum::ANNULEE->value] ?? 0),
             'total'      => (int) $parStatut->sum(),
+        ];
+    }
+
+    /**
+     * Les effectifs lus du point de vue de la caisse : combien d'eleves sont
+     * derriere les montants, et ou se concentrent les impayes.
+     *
+     * - `effectifs` compte les eleves : inscrits (inscription validee), en
+     *   attente du premier versement, a jour, en retard. Le retard suit la
+     *   definition des relances — reste des frais d'inscription ou mensualite
+     *   echue non soldee (Mensualite::estEnRetard) — pour que la tuile et la
+     *   fenetre de relance annoncent le meme monde.
+     *
+     * - `par_niveau` reprend le perimetre de finances() (inscriptions non
+     *   annulees) : ses totaux rejoignent ceux de la carte « Recouvrement ».
+     *   Le tarif etant fixe par niveau, c'est la repartition qui a un sens
+     *   financier.
+     *
+     * @return array{effectifs: array<string, int>, par_niveau: list<array<string, mixed>>}
+     */
+    private function effectifsFinanciers(AnneeScolaire $annee): array
+    {
+        $inscriptions = Inscription::query()
+            ->with(['classe.niveau', 'paiements', 'mensualites.paiements'])
+            ->where('annee_scolaire_id', $annee->id)
+            ->where('statut_inscription', '!=', StatutInscriptionEnum::ANNULEE)
+            ->get();
+
+        $effectifs = ['inscrits' => 0, 'en_attente' => 0, 'a_jour' => 0, 'en_retard' => 0];
+        $niveaux   = [];
+
+        foreach ($inscriptions as $inscription) {
+            $validee  = $inscription->estValidee();
+            $enRetard = $validee && (
+                $inscription->montant_inscription_restant > 0
+                || $inscription->mensualites->contains(fn (Mensualite $m) => $m->estEnRetard())
+            );
+
+            if ($validee) {
+                $effectifs['inscrits']++;
+                $effectifs[$enRetard ? 'en_retard' : 'a_jour']++;
+            } else {
+                $effectifs['en_attente']++;
+            }
+
+            $niveau = $inscription->classe?->niveau;
+            $cle    = $niveau?->id ?? 0;
+
+            $niveaux[$cle] ??= [
+                'niveau'    => $niveau?->nom ?? 'Sans niveau',
+                'code'      => $niveau?->code,
+                'eleves'    => 0,
+                'en_retard' => 0,
+                'du'        => 0,
+                'encaisse'  => 0,
+            ];
+
+            $niveaux[$cle]['eleves']++;
+            $niveaux[$cle]['en_retard'] += $enRetard ? 1 : 0;
+            $niveaux[$cle]['du']        += $inscription->montant_inscription
+                + (int) $inscription->mensualites->sum('montant_mensualite');
+            $niveaux[$cle]['encaisse']  += $inscription->montant_inscription_paye
+                + (int) $inscription->mensualites->sum(fn (Mensualite $m) => $m->total_paye);
+        }
+
+        ksort($niveaux);
+
+        return [
+            'effectifs'  => $effectifs,
+            'par_niveau' => array_values(array_map(fn (array $n) => $n + [
+                'reste' => max(0, $n['du'] - $n['encaisse']),
+                'taux'  => $n['du'] > 0 ? round(($n['encaisse'] / $n['du']) * 100, 1) : 0.0,
+            ], $niveaux)),
         ];
     }
 
@@ -514,6 +587,8 @@ class StatistiqueService implements StatistiqueServiceInterface
             ),
             'mensualites_par_statut' => ['paye' => 0, 'partiel' => 0, 'non_paye' => 0, 'total' => 0],
             'a_encaisser'            => ['inscriptions' => 0, 'mensualites' => 0],
+            'effectifs'              => ['inscrits' => 0, 'en_attente' => 0, 'a_jour' => 0, 'en_retard' => 0],
+            'par_niveau'             => [],
         ];
     }
 

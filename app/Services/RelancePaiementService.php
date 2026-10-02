@@ -376,8 +376,6 @@ class RelancePaiementService
      */
     private function arrieres(?int $tuteurId = null): Collection
     {
-        $aujourdhui = now()->startOfDay();
-
         $inscriptions = Inscription::query()
             ->with([
                 'eleve.tuteur',
@@ -403,7 +401,7 @@ class RelancePaiementService
             }
 
             $mois = $inscription->mensualites
-                ->filter(fn (Mensualite $m) => $m->reste > 0 && $this->echue($m, $aujourdhui))
+                ->filter(fn (Mensualite $m) => $m->estEnRetard())
                 ->map(fn (Mensualite $m) => [
                     'libelle' => sprintf('%s %d', self::MOIS[$m->mois] ?? $m->mois, $m->annee),
                     'reste'   => $m->reste,
@@ -432,18 +430,6 @@ class RelancePaiementService
         }
 
         return collect($familles);
-    }
-
-    /**
-     * Un mois sans date d'echeance (echeanciers anciens) est du a la fin du
-     * mois qu'il couvre.
-     */
-    private function echue(Mensualite $mensualite, CarbonInterface $aujourdhui): bool
-    {
-        $echeance = $mensualite->date_echeance
-            ?? Carbon::create($mensualite->annee, $mensualite->mois, 1)->endOfMonth();
-
-        return $echeance->lt($aujourdhui);
     }
 
     /** Ce qui empeche de relancer (`inactif`, `sans_arriere`, `sans_telephone`, `recent`), ou null. */
